@@ -18,7 +18,7 @@ class Adaptor(CbAdaptor):
         self.status =           "ok"
         self.state =            "stopped"
         self.minInterval =      10.0
-        self.apps =             {"btle_beacon": []},
+        self.apps =             {"btle_beacon": []}
         # super's __init__ must be called:
         #super(Adaptor, self).__init__(argv)
         CbAdaptor.__init__(self, argv)
@@ -34,24 +34,41 @@ class Adaptor(CbAdaptor):
                "state": self.state}
         self.sendManagerMessage(msg)
 
+    def sendCharacteristic(self, characteristic, data, timeStamp):
+        msg = {"id": self.id,
+               "content": "characteristic",
+               "characteristic": characteristic,
+               "data": data,
+               "timeStamp": timeStamp}
+        for a in self.apps[characteristic]:
+            self.sendMessage(msg, a)
+
     def startScan(self):
         dev_id = 0
-        if True:
-        #try:
+        try:
             self.sock = bluez.hci_open_dev(dev_id)
             blescan.hci_le_set_scan_parameters(self.sock)
             blescan.hci_enable_le_scan(self.sock)
             self.cbLog("info", "Bluetooth scan started")
             reactor.callLater(2, self.scan)
-        #except Exception as ex:
-        #    self.cbLog("error", "Error starting Bluetooth scan")
-        #    self.cbLog("error", "Exception: " +  str(type(ex)) + str(ex.args))
+        except Exception as ex:
+            self.cbLog("error", "Error starting Bluetooth scan")
+            self.cbLog("error", "Exception: " +  str(type(ex)) + str(ex.args))
 
     def scan(self):
         returnedList = blescan.parse_events(self.sock, 10)
-        self.cbLog("debug", "----------")
+        #self.cbLog("debug", "----------")
         for beacon in returnedList:
-            self.cbLog("debug", str(beacon))
+            #self.cbLog("debug", str(beacon))
+            b = beacon.split(",")
+            data = {"address": b[0],
+                    "uuid": b[1],
+                    "major": b[2],
+                    "minor": b[3],
+                    "reference_power": b[4],
+                    "rx_power": b[5]
+                   }
+            self.sendCharacteristic("btle_beacon", data, time.time())
         reactor.callLater(2, self.scan)
 
     def onAppInit(self, message):
@@ -60,7 +77,6 @@ class Adaptor(CbAdaptor):
         Called in a thread and so it is OK if it blocks.
         Called separately for every app that can make requests.
         """
-        #logging.debug("%s %s %s onAppInit, message = %s", ModuleName, self.id, self.friendly_name, message)
         tagStatus = "ok"
         resp = {"name": self.name,
                 "id": self.id,
@@ -72,12 +88,15 @@ class Adaptor(CbAdaptor):
         self.setState("running")
         
     def onAppRequest(self, message):
+        self.cbLog("debug", "onAppRequest: " + str(message))
+        self.cbLog("debug", "onAppRequest, apps: " + str(self.apps))
         # Switch off anything that already exists for this app
         for a in self.apps:
             if message["id"] in self.apps[a]:
                 self.apps[a].remove(message["id"])
         # Now update details based on the message
         for f in message["service"]:
+            self.cbLog("debug", "onAppRequest, f-characteristic: " + str(f["characteristic"]) + ", id: " + message["id"])
             if message["id"] not in self.apps[f["characteristic"]]:
                 self.apps[f["characteristic"]].append(message["id"])
                 if f["interval"] < self.minInterval:
