@@ -69,7 +69,7 @@ class Adaptor(CbAdaptor):
                     "rx_power": b[5]
                    }
             self.sendCharacteristic("btle_beacon", data, time.time())
-        reactor.callLater(2, self.scan)
+        reactor.callLater(0.5, self.scan)
 
     def onAppInit(self, message):
         """
