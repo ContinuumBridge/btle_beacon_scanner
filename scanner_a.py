@@ -49,6 +49,7 @@ class Adaptor(CbAdaptor):
             self.sock = bluez.hci_open_dev(dev_id)
             blescan.hci_le_set_scan_parameters(self.sock)
             blescan.hci_enable_le_scan(self.sock)
+            blescan.cbLog = self.cbLog
             self.cbLog("info", "Bluetooth scan started")
             reactor.callLater(2, self.scan)
         except Exception as ex:
