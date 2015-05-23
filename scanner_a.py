@@ -6,6 +6,7 @@
 
 import sys
 import time
+import json
 from cbcommslib import CbAdaptor
 from cbconfig import *
 from twisted.internet import threads
@@ -17,8 +18,7 @@ class Adaptor(CbAdaptor):
     def __init__(self, argv):
         self.status =           "ok"
         self.state =            "stopped"
-        self.minInterval =      10.0
-        self.apps =             {"btle_beacon": []}
+        self.uuids =            {}
         # super's __init__ must be called:
         #super(Adaptor, self).__init__(argv)
         CbAdaptor.__init__(self, argv)
@@ -40,8 +40,9 @@ class Adaptor(CbAdaptor):
                "characteristic": characteristic,
                "data": data,
                "timeStamp": timeStamp}
-        for a in self.apps[characteristic]:
-            self.sendMessage(msg, a)
+        if data["uuid"] in self.uuids:
+            for a in self.uuids[data["uuid"]]:
+                self.sendMessage(msg, a)
 
     def startScan(self):
         dev_id = 0
@@ -57,10 +58,10 @@ class Adaptor(CbAdaptor):
             self.cbLog("error", "Exception: " +  str(type(ex)) + str(ex.args))
 
     def scan(self):
-        returnedList = blescan.parse_events(self.sock, 10)
+        returnedList = blescan.parse_events(self.sock, 2)
         #self.cbLog("debug", "----------")
         for beacon in returnedList:
-            #self.cbLog("debug", str(beacon))
+            self.cbLog("debug", str(beacon))
             b = beacon.split(",")
             data = {"address": b[0],
                     "uuid": b[1],
@@ -69,7 +70,7 @@ class Adaptor(CbAdaptor):
                     "reference_power": b[4],
                     "rx_power": b[5]
                    }
-            self.sendCharacteristic("btle_beacon", data, time.time())
+            self.sendCharacteristic("ble_beacon", data, time.time())
         reactor.callLater(0.5, self.scan)
 
     def onAppInit(self, message):
@@ -82,7 +83,7 @@ class Adaptor(CbAdaptor):
         resp = {"name": self.name,
                 "id": self.id,
                 "status": tagStatus,
-                "service": [{"characteristic": "btle_beacon",
+                "service": [{"characteristic": "ble_beacon",
                              "interval": 1.0}],
                 "content": "service"}
         self.sendMessage(resp, message["id"])
@@ -90,19 +91,19 @@ class Adaptor(CbAdaptor):
         
     def onAppRequest(self, message):
         self.cbLog("debug", "onAppRequest: " + str(message))
-        self.cbLog("debug", "onAppRequest, apps: " + str(self.apps))
         # Switch off anything that already exists for this app
-        for a in self.apps:
-            if message["id"] in self.apps[a]:
-                self.apps[a].remove(message["id"])
+        for u in self.uuids:
+            if message["id"] in u:
+                self.uuids[u].remove(message["id"])
         # Now update details based on the message
         for f in message["service"]:
-            self.cbLog("debug", "onAppRequest, f-characteristic: " + str(f["characteristic"]) + ", id: " + message["id"])
-            if message["id"] not in self.apps[f["characteristic"]]:
-                self.apps[f["characteristic"]].append(message["id"])
-                if f["interval"] < self.minInterval:
-                    self.minInterval = f["interval"]
-        self.cbLog("debug", "apps: " + str(self.apps))
+            if f["characteristic"] == "ble_beacon":
+                for u in f["uuids"]:
+                    if u not in self.uuids:
+                        self.uuids[u] = [message["id"]]
+                    else:
+                        self.uuids[u].append(message["id"])
+        self.cbLog("debug", "uuids: " + str(json.dumps(self.uuids, indent=4)))
 
     def onAppCommand(self, message):
         if "data" not in message:
