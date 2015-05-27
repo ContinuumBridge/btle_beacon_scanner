@@ -61,14 +61,14 @@ class Adaptor(CbAdaptor):
         returnedList = blescan.parse_events(self.sock, 2)
         #self.cbLog("debug", "----------")
         for beacon in returnedList:
-            self.cbLog("debug", str(beacon))
+            #self.cbLog("debug", str(beacon))
             b = beacon.split(",")
             data = {"address": b[0],
                     "uuid": b[1],
-                    "major": b[2],
-                    "minor": b[3],
-                    "reference_power": b[4],
-                    "rx_power": b[5]
+                    "major": int(b[2]),
+                    "minor": int(b[3]),
+                    "reference_power": int(b[4]),
+                    "rx_power": int(b[5])
                    }
             self.sendCharacteristic("ble_beacon", data, time.time())
         reactor.callLater(0.5, self.scan)
