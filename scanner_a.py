@@ -40,8 +40,13 @@ class Adaptor(CbAdaptor):
                "characteristic": characteristic,
                "data": data,
                "timeStamp": timeStamp}
-        if data["uuid"] in self.uuids:
-            for a in self.uuids[data["uuid"]]:
+        u = data["uuid"]
+        self.cbLog("debug", "u: " + str(u))
+        self.cbLog("debug", "self.uuids: " + str(self.uuids))
+        if u in self.uuids:
+            self.cbLog("debug", "u in self.uuids")
+            for a in self.uuids[u]:
+                self.cbLog("debug", "sending: " + str(msg) + " to: " + str(a))
                 self.sendMessage(msg, a)
 
     def startScan(self):
@@ -59,17 +64,18 @@ class Adaptor(CbAdaptor):
 
     def scan(self):
         returnedList = blescan.parse_events(self.sock, 2)
-        #self.cbLog("debug", "----------")
+        self.cbLog("debug", "----------")
         for beacon in returnedList:
-            #self.cbLog("debug", str(beacon))
+            self.cbLog("debug", str(beacon))
             b = beacon.split(",")
             data = {"address": b[0],
-                    "uuid": b[1],
+                    "uuid": b[1].upper(),
                     "major": int(b[2]),
                     "minor": int(b[3]),
                     "reference_power": int(b[4]),
                     "rx_power": int(b[5])
                    }
+            self.cbLog("debug", "scan, sending: " + str(json.dumps(data, indent=4)))
             self.sendCharacteristic("ble_beacon", data, time.time())
         reactor.callLater(0.5, self.scan)
 
