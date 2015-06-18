@@ -14,6 +14,8 @@ from twisted.internet import reactor
 import blescan
 import bluetooth._bluetooth as bluez
 
+TRY_START_INTERVAL     = 10  # How often to retry BLE scanning if it fails to start
+
 class Adaptor(CbAdaptor):
     def __init__(self, argv):
         self.status =           "ok"
@@ -41,12 +43,8 @@ class Adaptor(CbAdaptor):
                "data": data,
                "timeStamp": timeStamp}
         u = data["uuid"]
-        self.cbLog("debug", "u: " + str(u))
-        self.cbLog("debug", "self.uuids: " + str(self.uuids))
         if u in self.uuids:
-            self.cbLog("debug", "u in self.uuids")
             for a in self.uuids[u]:
-                self.cbLog("debug", "sending: " + str(msg) + " to: " + str(a))
                 self.sendMessage(msg, a)
 
     def startScan(self):
@@ -56,17 +54,28 @@ class Adaptor(CbAdaptor):
             blescan.hci_le_set_scan_parameters(self.sock)
             blescan.hci_enable_le_scan(self.sock)
             blescan.cbLog = self.cbLog
-            self.cbLog("info", "Bluetooth scan started")
-            reactor.callLater(2, self.scan)
+            return True
         except Exception as ex:
-            self.cbLog("error", "Error starting Bluetooth scan")
-            self.cbLog("error", "Exception: " +  str(type(ex)) + str(ex.args))
+            self.cbLog("warning", "Problem starting Bluetooth scan, type: " + str(type(ex)) + ", args: " + str(ex.args))
+            return False
+
+    def tryScan(self):
+        d = threads.deferToThread(self.startScan)
+        d.addCallback(self.checkStartScan)
+
+    def checkStartScan(self, started):
+        if started:
+            self.cbLog("info", "Bluetooth scan started")
+            self.scan()
+        else:
+            self.cbLog("warning", "Could not start BLE scan, retrying in " + str(TRY_START_INTERVAL) + " seconds")
+            reactor.callLater(TRY_START_INTERVAL, self.tryScan)
 
     def scan(self):
         returnedList = blescan.parse_events(self.sock, 2)
-        self.cbLog("debug", "----------")
+        #self.cbLog("debug", "----------")
         for beacon in returnedList:
-            self.cbLog("debug", str(beacon))
+            #self.cbLog("debug", str(beacon))
             b = beacon.split(",")
             data = {"address": b[0],
                     "uuid": b[1].upper(),
@@ -75,7 +84,7 @@ class Adaptor(CbAdaptor):
                     "reference_power": int(b[4]),
                     "rx_power": int(b[5])
                    }
-            self.cbLog("debug", "scan, sending: " + str(json.dumps(data, indent=4)))
+            #self.cbLog("debug", "scan, sending: " + str(json.dumps(data, indent=4)))
             self.sendCharacteristic("ble_beacon", data, time.time())
         reactor.callLater(0.5, self.scan)
 
@@ -96,7 +105,7 @@ class Adaptor(CbAdaptor):
         self.setState("running")
         
     def onAppRequest(self, message):
-        self.cbLog("debug", "onAppRequest: " + str(message))
+        self.cbLog("debug", "onAppRequest: " + str(json.dumps(message, indent=4)))
         # Switch off anything that already exists for this app
         for u in self.uuids:
             if message["id"] in u:
@@ -122,7 +131,7 @@ class Adaptor(CbAdaptor):
             May be called again if there is a new configuration, which
             could be because a new app has been added.
         """
-        self.startScan()
+        self.tryScan()
         self.setState("starting")
 
 if __name__ == '__main__':
