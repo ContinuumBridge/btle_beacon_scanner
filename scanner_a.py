@@ -72,7 +72,7 @@ class Adaptor(CbAdaptor):
             reactor.callLater(TRY_START_INTERVAL, self.tryScan)
 
     def scan(self):
-        returnedList = blescan.parse_events(self.sock, 2)
+        returnedList = blescan.parse_events(self.sock, 5)
         #self.cbLog("debug", "----------")
         for beacon in returnedList:
             #self.cbLog("debug", str(beacon))

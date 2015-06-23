@@ -3,8 +3,8 @@
     "protocol": "peripheral", 
     "name": "BTLE Beacon Scanner", 
     "device_resource": "/api/bridge/v1/device/54", 
-    "url": "https://github.com/ContinuumBridge/btle_beacon_scanner/archive/v0.2.0.tar.gz", 
-    "version": "0.2.0", 
+    "url": "https://github.com/ContinuumBridge/btle_beacon_scanner/archive/v1.0.0.tar.gz", 
+    "version": "1.0.0", 
     "provider": "ContinuumBridge", 
     "adaptor_resource": "/api/bridge/v1/adaptor/17", 
     "description": "Continually scans for Bluetooth LE beacons and reports then to connected apps"
