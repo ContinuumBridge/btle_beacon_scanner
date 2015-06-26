@@ -21,6 +21,8 @@ class Adaptor(CbAdaptor):
         self.status =           "ok"
         self.state =            "stopped"
         self.uuids =            {}
+        self.scanLength =       3
+        self.lastScanTime =     0
         # super's __init__ must be called:
         #super(Adaptor, self).__init__(argv)
         CbAdaptor.__init__(self, argv)
@@ -45,6 +47,7 @@ class Adaptor(CbAdaptor):
         u = data["uuid"]
         if u in self.uuids:
             for a in self.uuids[u]:
+                #self.cbLog("debug", "sendCharacteristic for button " + str(data["major"]) + " to " + str(a))
                 self.sendMessage(msg, a)
 
     def startScan(self):
@@ -66,16 +69,31 @@ class Adaptor(CbAdaptor):
     def checkStartScan(self, started):
         if started:
             self.cbLog("info", "Bluetooth scan started")
-            self.scan()
+            self.doScan()
         else:
             self.cbLog("warning", "Could not start BLE scan, retrying in " + str(TRY_START_INTERVAL) + " seconds")
             reactor.callLater(TRY_START_INTERVAL, self.tryScan)
 
+    def doScan(self):
+        d = threads.deferToThread(self.scan)
+        d.addCallback(self.checkScan)
+
     def scan(self):
-        returnedList = blescan.parse_events(self.sock, 5)
-        self.cbLog("debug", "----------")
+        """ Scan length is optimised to number of beacons present, with aim of always getting result with 1s """
+        now = time.time()
+        if now - self.lastScanTime > 0.8 and self.scanLength >= 1:
+            self.scanLength -= 1
+        elif now - self.lastScanTime < 0.4:
+            self.scanLength += 1
+        #self.cbLog("debug", "scan, time: " + str(now-self.lastScanTime) + " scanLength: " + str(self.scanLength))
+        self.lastScanTime = now
+        returnedList = blescan.parse_events(self.sock, self.scanLength)
+        return returnedList
+
+    def checkScan(self, returnedList):
+        #self.cbLog("debug", "----------")
         for beacon in returnedList:
-            self.cbLog("debug", str(beacon))
+            #self.cbLog("debug", str(beacon))
             b = beacon.split(",")
             data = {"address": b[0],
                     "uuid": b[1].upper(),
@@ -86,7 +104,7 @@ class Adaptor(CbAdaptor):
                    }
             #self.cbLog("debug", "scan, sending: " + str(json.dumps(data, indent=4)))
             self.sendCharacteristic("ble_beacon", data, time.time())
-        reactor.callLater(0.5, self.scan)
+        self.doScan()
 
     def onAppInit(self, message):
         """
