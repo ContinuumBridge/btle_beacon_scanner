@@ -73,9 +73,9 @@ class Adaptor(CbAdaptor):
 
     def scan(self):
         returnedList = blescan.parse_events(self.sock, 5)
-        #self.cbLog("debug", "----------")
+        self.cbLog("debug", "----------")
         for beacon in returnedList:
-            #self.cbLog("debug", str(beacon))
+            self.cbLog("debug", str(beacon))
             b = beacon.split(",")
             data = {"address": b[0],
                     "uuid": b[1].upper(),
